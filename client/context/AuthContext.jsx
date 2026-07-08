@@ -3,12 +3,14 @@ import axios from "axios";
 import toast from "react-hot-toast";
 import { io } from "socket.io-client";
 
+// In production this is the Render backend URL (e.g. https://chat-app-server.onrender.com)
+// In development this is http://localhost:5000
 const backendUrl = import.meta.env.VITE_BACKEND_URL || "http://localhost:5000";
 
-// Always use relative URLs in the browser — Vite proxy handles /api → :5000 in dev,
-// and in production the frontend is served from the same origin as the API.
-// Do NOT set baseURL to backendUrl here — that bypasses the Vite proxy and breaks CORS.
-axios.defaults.baseURL = "";
+// Axios base URL:
+//   - DEV  → "" (relative) so Vite proxy forwards /api → localhost:5000
+//   - PROD → full Render URL so the browser hits the backend directly
+axios.defaults.baseURL = import.meta.env.DEV ? "" : backendUrl;
 
 export const AuthContext = createContext();
 
@@ -23,16 +25,16 @@ export const AuthProvider = ({ children }) => {
     // ── Socket helpers ────────────────────────────────────────────────────────
     const connectSocket = (userData) => {
         if (!userData?._id) return;
-        if (socketRef.current?.connected) return; // already connected
+        if (socketRef.current?.connected) return;
 
         const newSocket = io(backendUrl, {
             query: { userId: userData._id },
             transports: ["websocket", "polling"],
         });
 
-        newSocket.on("connect",       () => console.log("Socket connected:", newSocket.id));
+        newSocket.on("connect",        () => console.log("Socket connected:", newSocket.id));
         newSocket.on("getOnlineUsers", (ids) => setOnlineUsers(ids));
-        newSocket.on("connect_error", (err) => console.error("Socket error:", err.message));
+        newSocket.on("connect_error",  (err) => console.error("Socket error:", err.message));
 
         socketRef.current = newSocket;
         setSocket(newSocket);
@@ -54,7 +56,6 @@ export const AuthProvider = ({ children }) => {
             return;
         }
 
-        // Make sure token header is set before the request
         axios.defaults.headers.common["token"] = storedToken;
 
         try {
@@ -71,7 +72,6 @@ export const AuthProvider = ({ children }) => {
             localStorage.removeItem("token");
             delete axios.defaults.headers.common["token"];
         } finally {
-            // Always unblock the UI — no matter what happens
             setIsCheckingAuth(false);
         }
     };

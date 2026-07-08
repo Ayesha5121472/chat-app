@@ -11,18 +11,20 @@ const app = express();
 const server = http.createServer(app);
 
 // ── CORS ──────────────────────────────────────────────────────────────────────
+// CLIENT_URL is set to the Vercel frontend URL in production env vars on Render
 const allowedOrigins = [
-    process.env.CLIENT_URL || "http://localhost:5173",
+    process.env.CLIENT_URL,          // e.g. https://chat-app.vercel.app
+    "http://localhost:5173",
     "http://localhost:5174",
     "http://localhost:3000",
-];
+].filter(Boolean); // remove undefined if CLIENT_URL not set
 
 const corsOptions = {
     origin: (origin, callback) => {
-        // Allow requests with no origin (mobile apps, Postman, curl)
         if (!origin || allowedOrigins.includes(origin)) {
             callback(null, true);
         } else {
+            console.warn("CORS blocked:", origin);
             callback(new Error(`CORS blocked: ${origin}`));
         }
     },
@@ -39,16 +41,14 @@ export const io = new Server(server, {
     },
 });
 
-// Store online users { userId: socketId }
-export const userSocketMap = {};
+export const userSocketMap = {}; // { userId: socketId }
 
 io.on("connection", (socket) => {
     const userId = socket.handshake.query.userId;
-    console.log(`Socket connected — userId: ${userId}, socketId: ${socket.id}`);
+    console.log(`Socket connected — userId: ${userId}`);
 
     if (userId) {
         userSocketMap[userId] = socket.id;
-        // Broadcast updated online users list
         io.emit("getOnlineUsers", Object.keys(userSocketMap));
     }
 
@@ -61,38 +61,38 @@ io.on("connection", (socket) => {
     });
 });
 
-// ── Body Parsers ─────────────────────────────────────────────────────────────
-// Must come after cors, before routes
-// 10mb allows base64 images up to ~7.5MB actual size
+// ── Body Parsers ──────────────────────────────────────────────────────────────
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
 // ── Routes ────────────────────────────────────────────────────────────────────
-app.get("/api/status", (req, res) => res.json({ success: true, message: "Server is live" }));
-app.use("/api/auth", userRouter);
+app.get("/api/status", (req, res) =>
+    res.json({ success: true, message: "Server is live" })
+);
+app.use("/api/auth",     userRouter);
 app.use("/api/messages", messageRouter);
 
-// ── 404 Handler ───────────────────────────────────────────────────────────────
+// ── 404 ───────────────────────────────────────────────────────────────────────
 app.use((req, res) => {
     res.status(404).json({ success: false, message: "Route not found" });
 });
 
-// ── Global Error Handler ──────────────────────────────────────────────────────
+// ── Global error handler ──────────────────────────────────────────────────────
 app.use((err, req, res, _next) => {
-    console.error("Unhandled error:", err.stack || err.message);
+    console.error("Unhandled error:", err.message);
     res.status(500).json({ success: false, message: "Internal server error" });
 });
 
-// ── Start Server After DB Connection ──────────────────────────────────────────
+// ── Start ─────────────────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 5000;
 
 connectDB()
     .then(() => {
         server.listen(PORT, () =>
-            console.log(`Server running on http://localhost:${PORT}`)
+            console.log(`Server running on port ${PORT}`)
         );
     })
     .catch((err) => {
-        console.error("Failed to connect to MongoDB. Server not started.", err);
+        console.error("MongoDB connection failed:", err.message);
         process.exit(1);
     });

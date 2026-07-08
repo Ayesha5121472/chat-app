@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: chat-app-server
+    runtime: node
+    region: oregon
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: MONGODB_URI
+        sync: false       # set manually in Render dashboard
+      - key: JWT_SECRET
+        sync: false
+      - key: CLIENT_URL
+        sync: false       # set to your Vercel URL after deploying frontend
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false

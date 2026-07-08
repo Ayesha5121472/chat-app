@@ -1,1 +1,12 @@
 node_modules
+dist
+
+# Environment secrets — never commit these
+.env
+.env.local
+.env.production
+.env.development
+
+# OS files
+.DS_Store
+Thumbs.db
