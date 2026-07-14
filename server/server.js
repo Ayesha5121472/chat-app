@@ -5,7 +5,11 @@ import http from "http";
 import { connectDB } from "./lib/db.js";
 import userRouter from "./routes/userRoutes.js";
 import messageRouter from "./routes/messageRoutes.js";
+import groupRouter from "./routes/groupRoutes.js";
+import storyRouter from "./routes/storyRoutes.js";
 import { Server } from "socket.io";
+import { setIo } from "./controllers/groupController.js";
+import { ExpressPeerServer } from "peer";
 
 const app = express();
 const server = http.createServer(app);
@@ -41,7 +45,21 @@ export const io = new Server(server, {
     },
 });
 
+// Set io in group controller
+setIo(io);
+
+// ── Peer Server (for voice chat) ──────────────────────────────────────────────
+const peerServer = ExpressPeerServer(server, {
+    debug: true,
+    path: "/peerjs",
+});
+
+app.use("/api/peerjs", peerServer);
+
 export const userSocketMap = {}; // { userId: socketId }
+
+// Set userSocketMap on app.locals for access in controllers
+app.set("userSocketMap", userSocketMap);
 
 io.on("connection", (socket) => {
     const userId = socket.handshake.query.userId;
@@ -51,6 +69,21 @@ io.on("connection", (socket) => {
         userSocketMap[userId] = socket.id;
         io.emit("getOnlineUsers", Object.keys(userSocketMap));
     }
+
+    // Voice call events
+    socket.on("initiateVoiceCall", ({ from, to }) => {
+        const receiverSocketId = userSocketMap[to];
+        if (receiverSocketId) {
+            io.to(receiverSocketId).emit("incomingVoiceCall", { from });
+        }
+    });
+
+    socket.on("endVoiceCall", ({ from, to }) => {
+        const receiverSocketId = userSocketMap[to];
+        if (receiverSocketId) {
+            io.to(receiverSocketId).emit("voiceCallEnded");
+        }
+    });
 
     socket.on("disconnect", () => {
         console.log(`Socket disconnected — userId: ${userId}`);
@@ -69,8 +102,10 @@ app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 app.get("/api/status", (req, res) =>
     res.json({ success: true, message: "Server is live" })
 );
-app.use("/api/auth",     userRouter);
+app.use("/api/auth", userRouter);
 app.use("/api/messages", messageRouter);
+app.use("/api/groups", groupRouter);
+app.use("/api/stories", storyRouter);
 
 // ── 404 ───────────────────────────────────────────────────────────────────────
 app.use((req, res) => {
