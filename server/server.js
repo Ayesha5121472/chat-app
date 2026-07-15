@@ -1,3 +1,4 @@
+// Server restarted!
 import express from "express";
 import "dotenv/config";
 import cors from "cors";
@@ -78,10 +79,29 @@ io.on("connection", (socket) => {
         }
     });
 
+    socket.on("acceptVoiceCall", ({ from, to }) => {
+        const callerSocketId = userSocketMap[to];
+        if (callerSocketId) {
+            io.to(callerSocketId).emit("voiceCallAccepted", { from });
+        }
+    });
+
     socket.on("endVoiceCall", ({ from, to }) => {
         const receiverSocketId = userSocketMap[to];
         if (receiverSocketId) {
             io.to(receiverSocketId).emit("voiceCallEnded");
+        }
+    });
+
+    // Typing events
+    socket.on("typing", ({ from, to, isGroup }) => {
+        if (isGroup) {
+            socket.to(to).emit("typing", { from });
+        } else {
+            const receiverSocketId = userSocketMap[to];
+            if (receiverSocketId) {
+                io.to(receiverSocketId).emit("typing", { from });
+            }
         }
     });
 
