@@ -12,7 +12,8 @@
  */
 
 import EmojiPicker, { Theme, EmojiStyle } from "emoji-picker-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useContext } from "react";
+import { ThemeContext } from "../../context/ThemeContext";
 
 // ── Sticker data ──────────────────────────────────────────────────────────────
 // Each sticker is a single Unicode emoji rendered at large size.
@@ -94,6 +95,7 @@ const STICKER_CATEGORIES = [
 
 // ── Component ─────────────────────────────────────────────────────────────────
 const EmojiStickerPicker = ({ onEmojiSelect, onStickerSelect, onClose }) => {
+    const { theme } = useContext(ThemeContext);
     const [tab, setTab] = useState("emoji"); // "emoji" | "stickers"
     const [stickerCat, setStickerCat] = useState(0);
     const panelRef = useRef(null);
@@ -121,11 +123,11 @@ const EmojiStickerPicker = ({ onEmojiSelect, onStickerSelect, onClose }) => {
         <div
             ref={panelRef}
             className="absolute bottom-full mb-2 left-0 z-50 rounded-2xl overflow-hidden
-            shadow-2xl border border-white/10 bg-[#1e1a3a]"
+            shadow-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#1e1a3a] transition-colors duration-300"
             style={{ width: 340 }}
         >
             {/* ── Tab bar ── */}
-            <div className="flex border-b border-white/10">
+            <div className="flex border-b border-slate-200 dark:border-white/10">
                 {[
                     { id: "emoji",    label: "😊 Emoji"    },
                     { id: "stickers", label: "🎭 Stickers" },
@@ -136,8 +138,8 @@ const EmojiStickerPicker = ({ onEmojiSelect, onStickerSelect, onClose }) => {
                         onClick={() => setTab(id)}
                         className={`flex-1 py-2 text-sm font-medium transition
                         ${tab === id
-                            ? "text-violet-400 border-b-2 border-violet-400 bg-white/5"
-                            : "text-gray-400 hover:text-white"
+                            ? "text-violet-500 dark:text-violet-400 border-b-2 border-violet-500 dark:border-violet-400 bg-black/5 dark:bg-white/5"
+                            : "text-slate-500 dark:text-gray-400 hover:text-slate-800 dark:hover:text-white"
                         }`}
                     >
                         {label}
@@ -152,7 +154,7 @@ const EmojiStickerPicker = ({ onEmojiSelect, onStickerSelect, onClose }) => {
                         onEmojiClick={(emojiData) => {
                             onEmojiSelect(emojiData.emoji);
                         }}
-                        theme={Theme.DARK}
+                        theme={theme === "dark" ? Theme.DARK : Theme.LIGHT}
                         emojiStyle={EmojiStyle.NATIVE}
                         width={340}
                         height={380}
@@ -168,9 +170,9 @@ const EmojiStickerPicker = ({ onEmojiSelect, onStickerSelect, onClose }) => {
             {tab === "stickers" && (
                 <div className="flex flex-col" style={{ height: 380 }}>
                     {/* Category tabs */}
-                    <div className="flex overflow-x-auto gap-1 p-2 border-b border-white/10 flex-shrink-0
+                    <div className="flex overflow-x-auto gap-1 p-2 border-b border-slate-200 dark:border-white/10 flex-shrink-0
                         scrollbar-none">
-                        {STICKER_CATEGORIES.map((cat, i) => (
+                      {STICKER_CATEGORIES.map((cat, i) => (
                             <button
                                 key={cat.label}
                                 type="button"
@@ -178,8 +180,8 @@ const EmojiStickerPicker = ({ onEmojiSelect, onStickerSelect, onClose }) => {
                                 onClick={() => setStickerCat(i)}
                                 className={`flex-shrink-0 w-8 h-8 text-lg rounded-lg transition
                                 ${stickerCat === i
-                                    ? "bg-violet-500/40 ring-1 ring-violet-400"
-                                    : "hover:bg-white/10"
+                                    ? "bg-violet-500/20 dark:bg-violet-500/40 ring-1 ring-violet-500 dark:ring-violet-400"
+                                    : "hover:bg-slate-100 dark:hover:bg-white/10"
                                 }`}
                             >
                                 {cat.icon}
@@ -188,7 +190,7 @@ const EmojiStickerPicker = ({ onEmojiSelect, onStickerSelect, onClose }) => {
                     </div>
 
                     {/* Category label */}
-                    <p className="px-3 pt-2 pb-1 text-xs font-semibold text-gray-400 uppercase tracking-wider flex-shrink-0">
+                    <p className="px-3 pt-2 pb-1 text-xs font-semibold text-slate-500 dark:text-gray-400 uppercase tracking-wider flex-shrink-0">
                         {STICKER_CATEGORIES[stickerCat].label}
                     </p>
 
@@ -201,7 +203,7 @@ const EmojiStickerPicker = ({ onEmojiSelect, onStickerSelect, onClose }) => {
                                     type="button"
                                     onClick={() => onStickerSelect(sticker)}
                                     className="w-full aspect-square flex items-center justify-center
-                                    text-3xl rounded-xl hover:bg-white/10 active:scale-90 transition
+                                    text-3xl rounded-xl hover:bg-slate-100 dark:hover:bg-white/10 active:scale-90 transition
                                     cursor-pointer select-none"
                                     title={sticker}
                                 >

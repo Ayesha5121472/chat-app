@@ -25,7 +25,13 @@ export const AuthProvider = ({ children }) => {
     // ── Socket helpers ────────────────────────────────────────────────────────
     const connectSocket = (userData) => {
         if (!userData?._id) return;
-        if (socketRef.current?.connected) return;
+
+        // Always disconnect previous socket before connecting new one
+        if (socketRef.current) {
+            socketRef.current.disconnect();
+            socketRef.current = null;
+            setSocket(null);
+        }
 
         const newSocket = io(backendUrl, {
             query: { userId: userData._id },

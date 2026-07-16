@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import { useContext } from "react";
 import { AuthContext } from "../context/AuthContext";
+import { ThemeContext } from "../context/ThemeContext";
 import HomePage from "./pages/HomePage";
 import ProfilePage from "./pages/ProfilePage";
 import LoginPage from "./pages/LoginPage";
@@ -8,6 +9,7 @@ import bgImage from "./assets/bgImage.svg";
 
 const App = () => {
     const { authUser, isCheckingAuth } = useContext(AuthContext);
+    const { theme } = useContext(ThemeContext);
 
     // Waiting for token verification — show spinner
     if (isCheckingAuth) {
@@ -20,8 +22,8 @@ const App = () => {
 
     return (
         <div
-            className="min-h-screen bg-cover bg-center bg-no-repeat"
-            style={{ backgroundImage: `url(${bgImage})` }}
+            className="h-full overflow-hidden bg-cover bg-center bg-no-repeat bg-slate-100 dark:bg-transparent transition-colors duration-300"
+            style={{ backgroundImage: theme === "dark" ? `url(${bgImage})` : "none" }}
         >
             <Routes>
                 <Route path="/"        element={authUser ? <HomePage />   : <Navigate to="/login" replace />} />

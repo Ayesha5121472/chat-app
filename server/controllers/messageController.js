@@ -119,14 +119,14 @@ export const markMessageAsSeen = async (req, res) => {
 // ── Send Message ──────────────────────────────────────────────────────────────
 export const sendMessage = async (req, res) => {
     try {
-        const { text, image, isSticker, file, location } = req.body;
+        const { text, image, isSticker, file, location, audio } = req.body;
         const { id } = req.params;
         const senderId = req.user._id;
 
         console.log("📥 sendMessage request body:", req.body, "params.id:", id);
 
-        if (!text && !image && !file && !location) {
-            return res.status(400).json({ success: false, message: "Message must have text, image, file, or location" });
+        if (!text && !image && !file && !location && !audio) {
+            return res.status(400).json({ success: false, message: "Message must have text, image, file, audio, or location" });
         }
 
         // Check if it's a group or direct message
@@ -139,10 +139,14 @@ export const sendMessage = async (req, res) => {
             }
 
             let imageUrl = "";
+            let audioUrl = "";
             let fileData = {};
 
             if (image) {
                 imageUrl = await uploadImage(image, "chat-app/messages");
+            }
+            if (audio) {
+                audioUrl = await uploadFile(audio, "chat-app/messages/audio");
             }
             if (file && file.base64) {
                 const fileUrl = await uploadFile(file.base64, "chat-app/files");
@@ -159,6 +163,7 @@ export const sendMessage = async (req, res) => {
                 groupId: id,
                 text: text || "",
                 image: imageUrl,
+                audio: audioUrl,
                 file: fileData,
                 location: location || null,
                 isSticker: Boolean(isSticker),
@@ -185,10 +190,14 @@ export const sendMessage = async (req, res) => {
             }
 
             let imageUrl = "";
+            let audioUrl = "";
             let fileData = {};
 
             if (image) {
                 imageUrl = await uploadImage(image, "chat-app/messages");
+            }
+            if (audio) {
+                audioUrl = await uploadFile(audio, "chat-app/messages/audio");
             }
             if (file && file.base64) {
                 const fileUrl = await uploadFile(file.base64, "chat-app/files");
@@ -205,6 +214,7 @@ export const sendMessage = async (req, res) => {
                 receiverId: id,
                 text: text || "",
                 image: imageUrl,
+                audio: audioUrl,
                 file: fileData,
                 location: location || null,
                 isSticker: Boolean(isSticker),

@@ -10,17 +10,29 @@ const HomePage = () => {
     return (
         <div className="w-full h-screen sm:py-[5%] sm:px-[3%]">
             <div
-                className={`backdrop-blur-xl border-2 border-gray-600 rounded-2xl overflow-hidden
-                h-full grid grid-cols-1 ${
+                className={`backdrop-blur-xl border-2 border-slate-200 dark:border-gray-600 rounded-2xl shadow-xl dark:shadow-none
+                h-full grid grid-cols-1 overflow-hidden ${
                     selectedUser
                         ? "md:grid-cols-[1fr_1.5fr_1fr] xl:grid-cols-[1fr_2fr_1fr]"
                         : "md:grid-cols-[1fr_1fr]"
                 }`}
             >
-                <SideBar />
-                <ChatContainer />
-                {/* RightSideBar handles its own visibility via null return */}
-                <RightSideBar />
+                {/* On mobile, hide SideBar if a user is selected */}
+                <div className={`min-h-0 h-full overflow-hidden ${selectedUser ? "hidden md:block" : "block"}`}>
+                    <SideBar />
+                </div>
+                
+                {/* On mobile, hide ChatContainer if NO user is selected */}
+                <div className={`min-h-0 h-full overflow-hidden ${!selectedUser ? "hidden md:block" : "block"}`}>
+                    <ChatContainer />
+                </div>
+
+                {/* Right sidebar only on large screens */}
+                {selectedUser && (
+                    <div className="min-h-0 h-full overflow-hidden hidden lg:block">
+                        <RightSideBar />
+                    </div>
+                )}
             </div>
         </div>
     );

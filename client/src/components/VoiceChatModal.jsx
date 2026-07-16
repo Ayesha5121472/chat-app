@@ -3,21 +3,30 @@ import { ChatContext } from "../../context/ChatContext";
 import { AuthContext } from "../../context/AuthContext";
 import { Peer } from "peerjs";
 import toast from "react-hot-toast";
+import assets from "../assets/assets";
 
-const VoiceChatModal = ({ onClose }) => {
+const imgError = (e) => { e.target.src = assets.avatar_icon; };
+
+const VoiceChatModal = ({ type = "voice", incomingData = null, onClose }) => {
   const { selectedUser, selectedGroup } = useContext(ChatContext);
-  const { authUser, socket } = useContext(AuthContext);
+  const { authUser, socket, onlineUsers } = useContext(AuthContext);
 
+  const [callType, setCallType] = useState(incomingData ? incomingData.type : type); // "voice" | "video"
   const [localStream, setLocalStream] = useState(null);
   const [remoteStream, setRemoteStream] = useState(null);
   const [peer, setPeer] = useState(null);
   const [isMuted, setIsMuted] = useState(false);
+  const [isVideoEnabled, setIsVideoEnabled] = useState(true);
   const [isCallActive, setIsCallActive] = useState(false);
-  const [callStatus, setCallStatus] = useState("idle"); // idle, calling, connecting, connected, incoming
-  const [incomingCall, setIncomingCall] = useState(null);
+  const [callStatus, setCallStatus] = useState(incomingData ? "incoming" : "idle"); // idle, calling, connecting, connected, incoming
+  const [incomingCall, setIncomingCall] = useState(null); // The PeerJS call object
+  const [incomingSocketData, setIncomingSocketData] = useState(incomingData); // The socket call data
+  const [mediaError, setMediaError] = useState(null);
 
   const localAudioRef = useRef(null);
   const remoteAudioRef = useRef(null);
+  const localVideoRef = useRef(null);
+  const remoteVideoRef = useRef(null);
   const callRef = useRef(null);
   const peerRef = useRef(null);
   const localStreamRef = useRef(null);
@@ -44,6 +53,7 @@ const VoiceChatModal = ({ onClose }) => {
     setIsCallActive(false);
     setCallStatus("idle");
     setIncomingCall(null);
+    setMediaError(null);
   };
 
   const initializePeerAndStream = async () => {
@@ -52,21 +62,32 @@ const VoiceChatModal = ({ onClose }) => {
     }
 
     try {
+      const isVideo = callType === "video";
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: true,
+        video: isVideo,
       });
       setLocalStream(stream);
       localStreamRef.current = stream;
 
-      if (localAudioRef.current) {
-        localAudioRef.current.srcObject = stream;
-        localAudioRef.current.muted = true;
+      // Assign local stream preview
+      if (isVideo) {
+        setTimeout(() => {
+          if (localVideoRef.current) {
+            localVideoRef.current.srcObject = stream;
+            localVideoRef.current.muted = true;
+          }
+        }, 100);
+      } else {
+        setTimeout(() => {
+          if (localAudioRef.current) {
+            localAudioRef.current.srcObject = stream;
+            localAudioRef.current.muted = true;
+          }
+        }, 100);
       }
 
       const newPeer = new Peer(authUser._id, {
-        host: import.meta.env.DEV ? "localhost" : window.location.hostname,
-        port: import.meta.env.DEV ? 5000 : window.location.port,
-        path: "/api/peerjs",
         config: {
           iceServers: [
             { urls: "stun:stun.l.google.com:19302" },
@@ -83,21 +104,30 @@ const VoiceChatModal = ({ onClose }) => {
       });
 
       newPeer.on("call", (incomingCallObj) => {
-        console.log("Incoming call from:", incomingCallObj.peer);
-        setIncomingCall(incomingCallObj);
-        setCallStatus("incoming");
+        console.log("Incoming peer call:", incomingCallObj.peer);
+        if (localStreamRef.current) {
+          handleIncomingPeerCall(incomingCallObj, localStreamRef.current);
+        } else {
+          setIncomingCall(incomingCallObj);
+          setCallStatus("incoming");
+        }
       });
 
       newPeer.on("error", (err) => {
         console.error("Peer error:", err);
-        toast.error("Peer connection error: " + err.message);
+        toast.error("Connection error: " + err.message);
         cleanUp();
       });
 
       return { stream, peerInstance: newPeer };
     } catch (err) {
       console.error("Error initializing peer/stream:", err);
-      toast.error("Failed to initialize: " + (err.message || "Please allow microphone access"));
+      if (err.name === "NotAllowedError" || err.name === "PermissionDeniedError") {
+        setMediaError("Camera/Microphone access was denied. Please grant permission and try again.");
+      } else {
+        setMediaError(err.message || "Failed to initialize media devices.");
+      }
+      toast.error("Failed to initialize: " + (err.message || "Please allow media access"));
       throw err;
     }
   };
@@ -107,49 +137,33 @@ const VoiceChatModal = ({ onClose }) => {
     incomingCallObj.answer(stream);
     incomingCallObj.on("stream", (remoteMediaStream) => {
       setRemoteStream(remoteMediaStream);
-      if (remoteAudioRef.current) {
-        remoteAudioRef.current.srcObject = remoteMediaStream;
-      }
       setIsCallActive(true);
       setCallStatus("connected");
+
+      // Attach remote media stream
+      const isVideo = callType === "video";
+      setTimeout(() => {
+        if (isVideo && remoteVideoRef.current) {
+          remoteVideoRef.current.srcObject = remoteMediaStream;
+        } else if (!isVideo && remoteAudioRef.current) {
+          remoteAudioRef.current.srcObject = remoteMediaStream;
+        }
+      }, 100);
     });
     incomingCallObj.on("close", () => {
       cleanUp();
     });
     incomingCallObj.on("error", (err) => {
       console.error("Call error:", err);
-      toast.error("Voice call error: " + err.message);
+      toast.error("Call error: " + err.message);
       cleanUp();
     });
   };
 
-  const startCall = async () => {
-    if (!selectedUser) {
-      toast.error("Voice calls are only available for private chats");
-      return;
-    }
 
-    try {
-      setCallStatus("connecting");
-      const { peerInstance: newPeer } = await initializePeerAndStream();
-
-      await new Promise((resolve) => {
-        if (newPeer.open) resolve();
-        else newPeer.on("open", resolve);
-      });
-
-      socket.emit("initiateVoiceCall", {
-        from: authUser._id,
-        to: targetId,
-      });
-      setCallStatus("calling");
-    } catch (err) {
-      console.error("Error starting call:", err);
-    }
-  };
 
   const answerIncomingCall = async () => {
-    if (!incomingCall) return;
+    if (!incomingSocketData) return;
 
     try {
       setCallStatus("connecting");
@@ -168,16 +182,71 @@ const VoiceChatModal = ({ onClose }) => {
 
       socket.emit("acceptVoiceCall", {
         from: authUser._id,
-        to: incomingCall.peer,
+        to: incomingSocketData.from,
+        type: callType,
       });
 
-      handleIncomingPeerCall(incomingCall, stream);
-      setIncomingCall(null);
+      // The actual PeerJS call will arrive shortly, and the on("call") listener
+      // will handle it using the localStream we just initialized.
     } catch (err) {
       console.error("Error answering call:", err);
-      toast.error("Could not answer the call");
+      toast.error("Could not answer call");
     }
   };
+
+  // Start a new outgoing call
+  const startCall = async () => {
+    if (!selectedUser) {
+      toast.error("Calls are only available for private chats");
+      return;
+    }
+    
+    if (!onlineUsers.includes(targetId)) {
+        toast.error(`${selectedUser.fullName || selectedUser.name} is offline. You can only call online users.`);
+        setCallStatus("idle");
+        return;
+    }
+
+    // Reset any previous media errors
+    setMediaError(null);
+    try {
+      setCallStatus("connecting");
+      const { peerInstance: newPeer } = await initializePeerAndStream();
+
+      await new Promise((resolve, reject) => {
+        if (newPeer.open) return resolve();
+        
+        const timeout = setTimeout(() => reject(new Error("Connection to peer server timed out")), 10000);
+        
+        newPeer.on("open", () => {
+            clearTimeout(timeout);
+            resolve();
+        });
+        newPeer.on("error", (err) => {
+            clearTimeout(timeout);
+            reject(err);
+        });
+      });
+
+      socket.emit("initiateVoiceCall", {
+        from: authUser._id,
+        to: targetId,
+        type: callType,
+      });
+      setCallStatus("calling");
+    } catch (err) {
+      console.error("Error starting call:", err);
+      toast.error(err.message || "Failed to start call");
+      setCallStatus("idle");
+    }
+  };
+
+  // Automatically start call if not incoming
+  useEffect(() => {
+    if (callStatus === "idle" && !incomingSocketData) {
+        startCall();
+    }
+  }, []);
 
   const declineIncomingCall = () => {
     if (incomingCall) {
@@ -193,7 +262,15 @@ const VoiceChatModal = ({ onClose }) => {
       to: targetId,
     });
     cleanUp();
+    setMediaError(null);
   };
+
+  // Reset mediaError when modal is closed or unmounted
+  useEffect(() => {
+    return () => {
+      setMediaError(null);
+    };
+  }, []);
 
   const toggleMute = () => {
     if (localStream) {
@@ -204,49 +281,65 @@ const VoiceChatModal = ({ onClose }) => {
     }
   };
 
+  const toggleCamera = () => {
+    if (localStream) {
+      localStream.getVideoTracks().forEach(track => {
+        track.enabled = !isVideoEnabled;
+      });
+      setIsVideoEnabled(!isVideoEnabled);
+    }
+  };
+
   // Socket listeners for call events
   useEffect(() => {
     if (!socket) return;
 
-    const handleIncomingCall = ({ from }) => {
-      console.log("Incoming call from socket:", from);
-      toast("Incoming voice call!", {
+    const handleIncomingCall = ({ from, type: incomingType }) => {
+      console.log("Incoming call from socket:", from, incomingType);
+      setCallType(incomingType || "voice");
+      setCallStatus("incoming");
+      toast(`Incoming ${incomingType || "voice"} call!`, {
         icon: "📞",
         duration: 30000,
-        action: {
-          label: "Answer",
-          onClick: () => answerIncomingCall(),
-        },
       });
     };
 
-    const handleVoiceCallAccepted = async ({ from }) => {
-      console.log("Voice call accepted by:", from);
+    const handleVoiceCallAccepted = async ({ from, type: incomingType }) => {
+      console.log("Call accepted by:", from, incomingType);
+      if (incomingType) setCallType(incomingType);
+
       if (callStatus === "calling" && localStreamRef.current && peerRef.current) {
         const call = peerRef.current.call(from, localStreamRef.current);
         callRef.current = call;
         call.on("stream", (remoteMediaStream) => {
           setRemoteStream(remoteMediaStream);
-          if (remoteAudioRef.current) {
-            remoteAudioRef.current.srcObject = remoteMediaStream;
-          }
           setIsCallActive(true);
           setCallStatus("connected");
+
+          const isVideo = (incomingType || callType) === "video";
+          setTimeout(() => {
+            if (isVideo && remoteVideoRef.current) {
+              remoteVideoRef.current.srcObject = remoteMediaStream;
+            } else if (!isVideo && remoteAudioRef.current) {
+              remoteAudioRef.current.srcObject = remoteMediaStream;
+            }
+          }, 100);
         });
         call.on("close", () => {
           cleanUp();
         });
         call.on("error", (err) => {
           console.error("Call error:", err);
-          toast.error("Voice call error: " + err.message);
+          toast.error("Call error: " + err.message);
           cleanUp();
         });
       }
     };
 
     const handleCallEnded = () => {
-      toast("Voice call ended");
+      toast("Call ended");
       cleanUp();
+      onClose();
     };
 
     socket.on("incomingVoiceCall", handleIncomingCall);
@@ -258,7 +351,7 @@ const VoiceChatModal = ({ onClose }) => {
       socket.off("voiceCallAccepted", handleVoiceCallAccepted);
       socket.off("voiceCallEnded", handleCallEnded);
     };
-  }, [socket, callStatus, authUser?._id]);
+  }, [socket, callStatus, callType, authUser?._id]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -267,15 +360,42 @@ const VoiceChatModal = ({ onClose }) => {
     };
   }, []);
 
+  const isVideo = callType === "video";
+
   return (
-    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[1000] animate-in fade-in duration-200">
-      <div className="bg-gradient-to-br from-purple-900 via-indigo-900 to-blue-900 rounded-3xl p-8 max-w-md w-[95%] shadow-2xl border border-white/20 animate-in zoom-in duration-300">
-        <div className="flex justify-between items-center mb-6">
-          <h2 className="text-2xl font-bold text-white flex items-center gap-2">
-            <svg xmlns="http://www.w3.org/2000/svg" className="w-7 h-7 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-            </svg>
-            Voice Chat
+    <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-[1000] animate-in fade-in duration-200 backdrop-blur-sm">
+      <div className={`bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-950 shadow-2xl border border-white/10 animate-in zoom-in duration-300 relative overflow-hidden flex flex-col justify-between ${
+        isVideo && callStatus === "connected" ? "w-[90vw] h-[85vh] max-w-4xl rounded-3xl" : "w-[95%] max-w-md rounded-3xl p-8"
+      }`}>
+        
+        {/* ── Background Video Fill if Video Call Active ── */}
+        {isVideo && callStatus === "connected" && remoteStream && (
+          <div className="absolute inset-0 z-0 bg-black">
+            <video
+              ref={remoteVideoRef}
+              autoPlay
+              playsInline
+              className="w-full h-full object-cover"
+            />
+          </div>
+        )}
+
+        {/* ── Local PIP Video overlay ── */}
+        {isVideo && callStatus === "connected" && localStream && isVideoEnabled && (
+          <video
+            ref={localVideoRef}
+            autoPlay
+            playsInline
+            muted
+            className="absolute bottom-24 right-6 w-32 h-44 rounded-2xl object-cover border-2 border-white/20 shadow-2xl z-20 bg-slate-900"
+          />
+        )}
+
+        {/* ── Header ── */}
+        <div className={`flex justify-between items-center z-10 ${isVideo && callStatus === "connected" ? "p-6 bg-gradient-to-b from-black/60 to-transparent" : "mb-6"}`}>
+          <h2 className="text-xl font-bold text-white flex items-center gap-2">
+            <span>{isVideo ? "📹" : "📞"}</span>
+            {isVideo ? "Video Call" : "Voice Call"}
           </h2>
           <button
             onClick={() => {
@@ -285,118 +405,175 @@ const VoiceChatModal = ({ onClose }) => {
                 onClose();
               }
             }}
-            className="text-gray-300 hover:text-white text-3xl transition duration-300 hover:rotate-90"
+            className="text-gray-300 hover:text-white text-3xl transition duration-300 hover:rotate-90 cursor-pointer"
           >
             ×
           </button>
         </div>
 
-        <div className="flex flex-col items-center gap-6 mb-8">
-          <div className="relative">
-            <div className="w-32 h-32 rounded-full bg-gradient-to-br from-purple-500 to-indigo-500 flex items-center justify-center text-6xl animate-pulse shadow-lg shadow-purple-500/40">
-              {selectedUser?.profilePic ? (
+        {/* ── Call Info Display (pulsing avatar if not active video) ── */}
+        {(!isVideo || callStatus !== "connected") && (
+          <div className="flex flex-col items-center gap-6 my-4 z-10">
+            <div className="relative">
+              <div className="w-28 h-28 rounded-full bg-gradient-to-br from-purple-500 to-indigo-500 flex items-center justify-center text-6xl animate-pulse shadow-lg shadow-purple-500/40 overflow-hidden">
                 <img
-                  src={selectedUser.profilePic}
-                  alt={selectedUser.fullName}
-                  className="w-full h-full rounded-full object-cover"
+                  src={currentTarget?.profilePic || assets.avatar_icon}
+                  alt={currentTarget?.fullName}
+                  onError={imgError}
+                  className="w-full h-full object-cover"
                 />
-              ) : (
-                <svg xmlns="http://www.w3.org/2000/svg" className="w-16 h-16 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                </svg>
+              </div>
+              {isCallActive && (
+                <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-green-500 text-white px-3 py-0.5 rounded-full text-xs font-bold shadow-lg">
+                  Connected
+                </div>
               )}
             </div>
-            {isCallActive && (
-              <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-green-500 text-white px-3 py-1 rounded-full text-sm font-bold shadow-lg">
-                Live
+
+            <div className="text-center">
+              <p className="text-lg font-bold text-white">
+                {currentTarget?.fullName || currentTarget?.name}
+              </p>
+              <p className="text-sm text-gray-400 font-medium">
+                {callStatus === "idle" && "Ready to connect"}
+                {callStatus === "calling" && "Calling..."}
+                {callStatus === "connecting" && "Connecting..."}
+                {callStatus === "connected" && "Connected"}
+                {callStatus === "incoming" && `Incoming ${callType} call...`}
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* ── Video call overlay status text ── */}
+        {isVideo && callStatus === "connected" && (
+          <div className="absolute top-20 left-6 z-10 bg-black/40 px-4 py-1.5 rounded-full text-xs font-bold text-white backdrop-blur-md">
+            🔴 Live: {currentTarget?.fullName}
+          </div>
+        )}
+
+        {/* ── Hidden audio tags ── */}
+        <audio ref={localAudioRef} autoPlay playsInline />
+        <audio ref={remoteAudioRef} autoPlay playsInline />
+
+        {/* Media permission error overlay */}
+        {mediaError && (
+          <div className="absolute inset-0 bg-black/80 flex items-center justify-center z-20 p-4">
+            <div className="bg-slate-800 border border-white/10 p-6 rounded-2xl shadow-2xl text-center max-w-sm w-full">
+              <div className="text-4xl mb-3">🎙️</div>
+              <h3 className="text-white font-bold text-lg mb-2">Microphone Permission Required</h3>
+              <p className="text-red-400 text-sm mb-4">{mediaError}</p>
+              <div className="bg-white/5 rounded-xl p-4 text-left text-xs text-gray-300 mb-4 space-y-2">
+                <p className="font-semibold text-white">How to allow permission:</p>
+                <p>1. Click the 🔒 lock icon in the browser address bar</p>
+                <p>2. Set <strong>Microphone</strong> &amp; <strong>Camera</strong> to "Allow"</p>
+                <p>3. Refresh the page and try again</p>
               </div>
-            )}
+              <div className="flex gap-3">
+                <button
+                  onClick={() => { setMediaError(null); onClose(); }}
+                  className="flex-1 px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-xl text-sm transition"
+                >
+                  Close
+                </button>
+                <button
+                  onClick={async () => {
+                    setMediaError(null);
+                    try {
+                      await initializePeerAndStream();
+                      toast.success("Media devices initialized!");
+                    } catch (e) {
+                      // keep error state shown again
+                    }
+                  }}
+                  className="flex-1 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-sm transition font-semibold"
+                >
+                  Retry
+                </button>
+              </div>
+            </div>
           </div>
+        )}
 
-          <div className="text-center">
-            <p className="text-lg font-semibold text-white">
-              {currentTarget?.fullName || currentTarget?.name}
-            </p>
-            <p className="text-sm text-gray-300">
-              {callStatus === "idle" && "Ready to call"}
-              {callStatus === "calling" && "Calling..."}
-              {callStatus === "connecting" && "Connecting..."}
-              {callStatus === "connected" && "Connected"}
-              {callStatus === "incoming" && "Incoming call..."}
-            </p>
-          </div>
 
-          {/* Hidden audio elements */}
-          <audio ref={localAudioRef} autoPlay playsInline />
-          <audio ref={remoteAudioRef} autoPlay playsInline />
-
-          {/* Call controls */}
+        {/* ── Control Bar ── */}
+        <div className={`flex flex-col items-center justify-center z-10 ${
+          isVideo && callStatus === "connected" ? "p-6 bg-gradient-to-t from-black/60 to-transparent" : ""
+        }`}>
           <div className="flex items-center gap-4">
+            
+            {/* Call Toggle Actions */}
             {!isCallActive ? (
               <>
                 {callStatus === "incoming" ? (
-                  <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-6">
                     <button
                       onClick={declineIncomingCall}
-                      className="w-16 h-16 rounded-full bg-red-500 hover:bg-red-600 text-white flex items-center justify-center transition duration-300 hover:scale-110 shadow-lg shadow-red-500/50"
+                      className="w-14 h-14 rounded-full bg-red-500 hover:bg-red-600 text-white flex items-center justify-center transition duration-300 hover:scale-110 shadow-lg shadow-red-500/50 cursor-pointer"
                       title="Decline Call"
                     >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M16 8l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2M5 3a2 2 0 00-2 2v1c0 8.284 6.716 15 15 15h1a2 2 0 002-2v-3.28a1 1 0 00-.684-.948l-4.493-1.498a1 1 0 00-1.21.502l-1.13 2.257a11.042 11.042 0 01-5.516-5.517l2.257-1.13a1 1 0 00.502-1.21L9.228 3.683A1 1 0 008.28 3H5z" />
+                      <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                       </svg>
                     </button>
                     <button
                       onClick={answerIncomingCall}
-                      className="w-16 h-16 rounded-full bg-green-500 hover:bg-green-600 text-white flex items-center justify-center transition duration-300 hover:scale-110 shadow-lg shadow-green-500/50"
+                      className="w-14 h-14 rounded-full bg-green-500 hover:bg-green-600 text-white flex items-center justify-center transition duration-300 hover:scale-110 shadow-lg shadow-green-500/50 cursor-pointer"
                       title="Answer Call"
                     >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                      <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                       </svg>
                     </button>
                   </div>
                 ) : (
                   <button
                     onClick={startCall}
-                    className="w-16 h-16 rounded-full bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white flex items-center justify-center transition duration-300 hover:scale-110 shadow-lg shadow-green-500/50"
+                    className="w-16 h-16 rounded-full bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white flex items-center justify-center transition duration-300 hover:scale-110 shadow-lg shadow-green-500/50 cursor-pointer font-bold"
                     title="Start Call"
                   >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-                    </svg>
+                    Start
                   </button>
                 )}
               </>
             ) : (
-              <>
+              <div className="flex items-center gap-4 bg-slate-900/60 p-3 rounded-full backdrop-blur-md border border-white/10 shadow-xl">
+                
+                {/* Microphone Mute */}
                 <button
                   onClick={toggleMute}
-                  className={`w-14 h-14 rounded-full flex items-center justify-center transition duration-300 hover:scale-110 shadow-lg ${
-                    isMuted ? "bg-red-500 hover:bg-red-600 shadow-red-500/50" : "bg-white/20 hover:bg-white/30"
-                  } text-white`}
-                  title={isMuted ? "Unmute" : "Mute"}
+                  className={`w-12 h-12 rounded-full flex items-center justify-center transition duration-300 hover:scale-110 cursor-pointer ${
+                    isMuted ? "bg-red-500 text-white" : "bg-white/10 text-gray-300 hover:bg-white/20"
+                  }`}
+                  title={isMuted ? "Unmute Mic" : "Mute Mic"}
                 >
-                  {isMuted ? (
-                    <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
-                    </svg>
-                  ) : (
-                    <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
-                    </svg>
-                  )}
+                  {isMuted ? "🔇" : "🎙️"}
                 </button>
+
+                {/* Camera Toggle (Video only) */}
+                {isVideo && (
+                  <button
+                    onClick={toggleCamera}
+                    className={`w-12 h-12 rounded-full flex items-center justify-center transition duration-300 hover:scale-110 cursor-pointer ${
+                      !isVideoEnabled ? "bg-red-500 text-white" : "bg-white/10 text-gray-300 hover:bg-white/20"
+                    }`}
+                    title={isVideoEnabled ? "Turn Camera Off" : "Turn Camera On"}
+                  >
+                    {isVideoEnabled ? "📷" : "🚫"}
+                  </button>
+                )}
+
+                {/* Hang Up */}
                 <button
                   onClick={endCall}
-                  className="w-16 h-16 rounded-full bg-gradient-to-r from-red-500 to-rose-500 hover:from-red-600 hover:to-rose-600 text-white flex items-center justify-center transition duration-300 hover:scale-110 shadow-lg shadow-red-500/50"
-                  title="End Call"
+                  className="w-14 h-14 rounded-full bg-gradient-to-r from-red-500 to-rose-500 hover:from-red-650 hover:to-rose-650 text-white flex items-center justify-center transition duration-300 hover:scale-110 shadow-lg shadow-red-500/40 cursor-pointer"
+                  title="Hang Up"
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M16 8l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2M5 3a2 2 0 00-2 2v1c0 8.284 6.716 15 15 15h1a2 2 0 002-2v-3.28a1 1 0 00-.684-.948l-4.493-1.498a1 1 0 00-1.21.502l-1.13 2.257a11.042 11.042 0 01-5.516-5.517l2.257-1.13a1 1 0 00.502-1.21L9.228 3.683A1 1 0 008.28 3H5z" />
+                  <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                   </svg>
                 </button>
-              </>
+              </div>
             )}
           </div>
         </div>

@@ -8,6 +8,7 @@ const messageSchema = new mongoose.Schema(
         text:       { type: String, default: "" },
         // Stores either a Cloudinary URL or a base64 data URI as fallback
         image:      { type: String, default: "" },
+        audio:      { type: String, default: "" },
         file:       { 
             url: { type: String, default: "" }, 
             name: { type: String, default: "" }, 

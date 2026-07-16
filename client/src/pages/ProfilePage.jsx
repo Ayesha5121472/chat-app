@@ -22,7 +22,6 @@ const ProfilePage = () => {
             toast.error("Please select a valid image file (PNG, JPG, WEBP).");
             return;
         }
-        // 5 MB max — base64 is ~33% larger so this keeps payload under 7 MB
         if (file.size > 5 * 1024 * 1024) {
             toast.error("Image must be smaller than 5 MB.");
             e.target.value = "";
@@ -38,19 +37,16 @@ const ProfilePage = () => {
 
         try {
             if (!selectedImg) {
-                // No new picture — just update text fields
                 await updateProfile({ fullName: name, bio });
                 navigate("/");
                 return;
             }
 
-            // Convert image file → base64 data URI, then send to server
             const reader = new FileReader();
-
             reader.onloadend = async () => {
                 try {
                     await updateProfile({
-                        profilePic: reader.result, // base64 data URI
+                        profilePic: reader.result,
                         fullName: name,
                         bio,
                     });
@@ -69,8 +65,6 @@ const ProfilePage = () => {
             };
 
             reader.readAsDataURL(selectedImg);
-            // NOTE: don't call setIsLoading(false) here —
-            // the reader is async; finally() above handles it
         } catch (err) {
             console.error("handleSubmit error:", err);
             toast.error("Something went wrong.");
@@ -78,20 +72,17 @@ const ProfilePage = () => {
         }
     };
 
-    // Use object URL for local preview, Cloudinary URL or default for saved pic
     const previewSrc = selectedImg
         ? URL.createObjectURL(selectedImg)
         : authUser.profilePic || assets.avatar_icon;
 
     return (
-        <div className="min-h-screen flex items-center justify-center px-4">
-            <div className="w-full max-w-2xl backdrop-blur-2xl text-gray-300 border-2
-                border-gray-600 flex items-center justify-between max-sm:flex-col-reverse
-                rounded-xl overflow-hidden">
+        <div className="min-h-screen bg-gradient-to-br from-slate-50 via-slate-100 to-slate-50 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 flex items-center justify-center px-4 transition-colors duration-300">
+            <div className="w-full max-w-2xl text-slate-800 dark:text-gray-200 flex items-center justify-between max-sm:flex-col-reverse rounded-3xl overflow-hidden glass-panel border border-slate-200/50 dark:border-white/10 shadow-2xl p-6 sm:p-10 animate-slide-in-up">
 
                 {/* ── Form ── */}
-                <form onSubmit={handleSubmit} className="flex flex-col gap-5 p-10 flex-1">
-                    <h3 className="text-xl font-medium text-white">Profile Details</h3>
+                <form onSubmit={handleSubmit} className="flex flex-col gap-5 flex-1 w-full">
+                    <h3 className="text-xl font-bold text-slate-800 dark:text-white">Profile Details</h3>
 
                     {/* Profile picture upload */}
                     <label htmlFor="avatar" className="flex items-center gap-4 cursor-pointer group">
@@ -106,16 +97,14 @@ const ProfilePage = () => {
                             <img
                                 src={previewSrc}
                                 alt="Profile preview"
-                                className="w-16 h-16 rounded-full object-cover border-2 border-gray-500
-                                group-hover:border-violet-400 transition"
+                                className="w-16 h-16 rounded-full object-cover border-2 border-purple-500/50 group-hover:border-purple-500 transition shadow-md shadow-purple-500/10"
                                 onError={(e) => { e.target.src = assets.avatar_icon; }}
                             />
-                            <div className="absolute inset-0 rounded-full bg-black/50 flex items-center
-                                justify-center opacity-0 group-hover:opacity-100 transition">
-                                <span className="text-white text-xs font-medium">Change</span>
+                            <div className="absolute inset-0 rounded-full bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition">
+                                <span className="text-white text-xs font-semibold">Change</span>
                             </div>
                         </div>
-                        <span className="text-sm text-gray-400 group-hover:text-violet-400 transition">
+                        <span className="text-sm text-slate-500 dark:text-gray-400 group-hover:text-purple-600 dark:group-hover:text-purple-400 transition font-medium">
                             {selectedImg ? `✓ ${selectedImg.name}` : "Upload profile picture"}
                         </span>
                     </label>
@@ -126,9 +115,7 @@ const ProfilePage = () => {
                         required
                         value={name}
                         onChange={(e) => setName(e.target.value)}
-                        className="p-2 border border-gray-500 rounded-md bg-transparent
-                        focus:outline-none focus:ring-2 focus:ring-violet-500 text-white
-                        placeholder-gray-400"
+                        className="p-3 border border-slate-300 dark:border-gray-700 rounded-xl bg-white/50 dark:bg-slate-800/20 focus:outline-none focus:ring-2 focus:ring-purple-500 text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-gray-500 transition"
                     />
 
                     <textarea
@@ -137,30 +124,27 @@ const ProfilePage = () => {
                         rows={4}
                         value={bio}
                         onChange={(e) => setBio(e.target.value)}
-                        className="p-2 border border-gray-500 rounded-md bg-transparent
-                        focus:outline-none focus:ring-2 focus:ring-violet-500 text-white
-                        placeholder-gray-400 resize-none"
+                        className="p-3 border border-slate-300 dark:border-gray-700 rounded-xl bg-white/50 dark:bg-slate-800/20 focus:outline-none focus:ring-2 focus:ring-purple-500 text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-gray-500 resize-none transition"
                     />
 
                     <button
                         type="submit"
                         disabled={isLoading}
-                        className="bg-gradient-to-r from-purple-400 to-violet-600 text-white
-                        p-2 rounded-full text-lg cursor-pointer disabled:opacity-60 transition font-medium"
+                        className="bg-gradient-to-r from-purple-500 to-violet-600 hover:from-purple-600 hover:to-violet-750 text-white p-3 rounded-full text-base cursor-pointer disabled:opacity-60 transition font-bold shadow-md shadow-purple-500/20 active:scale-98"
                     >
                         {isLoading ? "Saving..." : "Save Profile"}
                     </button>
                 </form>
 
                 {/* ── Live preview ── */}
-                <div className="flex flex-col items-center gap-3 mx-10 max-sm:mt-8 flex-shrink-0">
+                <div className="flex flex-col items-center gap-3 mx-10 max-sm:my-6 flex-shrink-0">
                     <img
                         src={previewSrc}
                         alt="Preview"
-                        className="w-36 h-36 rounded-full object-cover border-4 border-gray-500"
+                        className="w-32 h-32 rounded-full object-cover border-4 border-slate-200 dark:border-gray-700 shadow-xl"
                         onError={(e) => { e.target.src = assets.avatar_icon; }}
                     />
-                    <p className="text-sm text-gray-400 text-center max-w-[140px] truncate">
+                    <p className="text-sm font-bold text-slate-600 dark:text-gray-400 text-center max-w-[140px] truncate">
                         {name || authUser.fullName}
                     </p>
                 </div>

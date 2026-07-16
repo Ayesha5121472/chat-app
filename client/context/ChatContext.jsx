@@ -173,6 +173,28 @@ export const ChatProvider = ({ children }) => {
         }
     };
 
+    const markStoryViewed = async (storyId, viewerData) => {
+        try {
+            await axios.post(`/api/stories/view/${storyId}`);
+            // Update local state to include viewer
+            setStories((prev) =>
+                prev.map((s) =>
+                    s._id === storyId
+                        ? {
+                              ...s,
+                              views: s.views?.some((v) => (v._id || v) === viewerData._id)
+                                  ? s.views
+                                  : [...(s.views || []), viewerData],
+                          }
+                        : s
+                )
+            );
+        } catch (err) {
+            // Silently fail - view tracking is non-critical
+            console.warn("Could not mark story viewed:", err.message);
+        }
+    };
+
     const getMessages = async (id) => {
         try {
             const { data } = await axios.get(`/api/messages/${id}`);
@@ -254,6 +276,12 @@ export const ChatProvider = ({ children }) => {
 
     useEffect(() => {
         if (authUser) {
+            // Reset previous session's state first
+            setSelectedUser(null);
+            setSelectedGroup(null);
+            setMessages([]);
+            setUnseenMessages({});
+            // Then fetch fresh data for the new user
             getUsers();
             getMyGroups();
             getStories();
@@ -381,6 +409,7 @@ export const ChatProvider = ({ children }) => {
                 removeGroupMember,
                 createStory,
                 deleteStory,
+                markStoryViewed,
                 getMessages,
                 sendMessage,
                 addReaction,

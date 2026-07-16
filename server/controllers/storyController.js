@@ -27,7 +27,8 @@ export const createStory = async (req, res) => {
             userId,
             content: storyContent,
             type: type || "text",
-            expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours from now
+            expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours
+            views: [],
         });
 
         await story.populate("userId", "fullName profilePic");
@@ -41,15 +42,32 @@ export const createStory = async (req, res) => {
 export const getStories = async (req, res) => {
     try {
         const stories = await Story.find({
-            expiresAt: { $gt: new Date() },
+            expiresAt: { $gt: new Date() }, // only non-expired
         })
             .populate("userId", "fullName profilePic")
+            .populate("views", "fullName profilePic")
             .sort({ createdAt: -1 });
 
         res.json({ success: true, stories });
     } catch (error) {
         console.error("Get stories error:", error);
         res.status(500).json({ success: false, message: "Failed to get stories" });
+    }
+};
+
+export const markStoryViewed = async (req, res) => {
+    try {
+        const { storyId } = req.params;
+        const userId = req.user._id;
+
+        await Story.findByIdAndUpdate(storyId, {
+            $addToSet: { views: userId }, // avoid duplicate views
+        });
+
+        res.json({ success: true });
+    } catch (error) {
+        console.error("Mark story viewed error:", error);
+        res.status(500).json({ success: false, message: "Failed to mark story viewed" });
     }
 };
 

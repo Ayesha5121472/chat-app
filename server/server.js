@@ -52,7 +52,7 @@ setIo(io);
 // ── Peer Server (for voice chat) ──────────────────────────────────────────────
 const peerServer = ExpressPeerServer(server, {
     debug: true,
-    path: "/peerjs",
+    path: "/",
 });
 
 app.use("/api/peerjs", peerServer);
@@ -71,18 +71,18 @@ io.on("connection", (socket) => {
         io.emit("getOnlineUsers", Object.keys(userSocketMap));
     }
 
-    // Voice call events
-    socket.on("initiateVoiceCall", ({ from, to }) => {
+    // Voice/Video call events
+    socket.on("initiateVoiceCall", ({ from, to, type }) => {
         const receiverSocketId = userSocketMap[to];
         if (receiverSocketId) {
-            io.to(receiverSocketId).emit("incomingVoiceCall", { from });
+            io.to(receiverSocketId).emit("incomingVoiceCall", { from, type });
         }
     });
 
-    socket.on("acceptVoiceCall", ({ from, to }) => {
+    socket.on("acceptVoiceCall", ({ from, to, type }) => {
         const callerSocketId = userSocketMap[to];
         if (callerSocketId) {
-            io.to(callerSocketId).emit("voiceCallAccepted", { from });
+            io.to(callerSocketId).emit("voiceCallAccepted", { from, type });
         }
     });
 

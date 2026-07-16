@@ -59,31 +59,30 @@ const LoginPage = () => {
     };
 
     return (
-        <div className="min-h-screen flex items-center justify-center gap-8 sm:justify-evenly max-sm:flex-col">
+        <div className="min-h-screen bg-gradient-to-br from-slate-50 via-slate-100 to-slate-50 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 flex items-center justify-center gap-8 sm:justify-evenly max-sm:flex-col px-4 transition-colors duration-300">
             {/* Logo */}
             <img
                 src={assets.logo_big}
                 alt="App logo"
-                className="w-[min(30vw,250px)] max-sm:w-40"
+                className="w-[min(30vw,250px)] max-sm:w-40 drop-shadow-lg"
             />
 
             {/* Form */}
             <form
                 onSubmit={onSubmitHandler}
-                className="border-2 bg-white/8 text-white border-gray-500 p-6 flex flex-col
-                gap-5 rounded-lg shadow-lg w-full max-w-sm"
+                className="bg-white/40 dark:bg-slate-900/40 text-slate-800 dark:text-white border border-slate-200/50 dark:border-white/10 p-8 flex flex-col gap-5 rounded-3xl shadow-2xl w-full max-w-sm glass-panel animate-slide-in-up"
             >
                 {/* Title row */}
-                <h2 className="font-medium text-2xl flex justify-between items-center">
+                <h2 className="font-bold text-2xl flex justify-between items-center text-slate-800 dark:text-white">
                     {currState}
                     {isDataSubmitted && (
                         <button
                             type="button"
                             onClick={() => setIsDataSubmitted(false)}
                             aria-label="Go back"
-                            className="focus:outline-none"
+                            className="focus:outline-none cursor-pointer"
                         >
-                            <img src={assets.arrow_icon} alt="Back" className="w-5 cursor-pointer" />
+                            <img src={assets.arrow_icon} alt="Back" className="w-5" />
                         </button>
                     )}
                 </h2>
@@ -96,9 +95,7 @@ const LoginPage = () => {
                         required
                         value={fullName}
                         onChange={(e) => setFullName(e.target.value)}
-                        className="p-2 border border-gray-500 rounded-md bg-transparent
-                        focus:outline-none focus:ring-2 focus:ring-indigo-500 text-white
-                        placeholder-gray-400"
+                        className="p-3 border border-slate-300 dark:border-gray-700 rounded-xl bg-white/50 dark:bg-slate-800/20 focus:outline-none focus:ring-2 focus:ring-purple-500 text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-gray-500 transition"
                     />
                 )}
 
@@ -111,9 +108,7 @@ const LoginPage = () => {
                             required
                             value={email}
                             onChange={(e) => setEmail(e.target.value)}
-                            className="p-2 border border-gray-500 rounded-md bg-transparent
-                            focus:outline-none focus:ring-2 focus:ring-indigo-500 text-white
-                            placeholder-gray-400"
+                            className="p-3 border border-slate-300 dark:border-gray-700 rounded-xl bg-white/50 dark:bg-slate-800/20 focus:outline-none focus:ring-2 focus:ring-purple-500 text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-gray-500 transition"
                         />
                         <input
                             type="password"
@@ -122,9 +117,7 @@ const LoginPage = () => {
                             minLength={6}
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
-                            className="p-2 border border-gray-500 rounded-md bg-transparent
-                            focus:outline-none focus:ring-2 focus:ring-indigo-500 text-white
-                            placeholder-gray-400"
+                            className="p-3 border border-slate-300 dark:border-gray-700 rounded-xl bg-white/50 dark:bg-slate-800/20 focus:outline-none focus:ring-2 focus:ring-purple-500 text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-gray-500 transition"
                         />
                     </>
                 )}
@@ -137,9 +130,7 @@ const LoginPage = () => {
                         rows={4}
                         value={bio}
                         onChange={(e) => setBio(e.target.value)}
-                        className="p-2 border border-gray-500 rounded-md bg-transparent
-                        focus:outline-none focus:ring-2 focus:ring-indigo-500 text-white
-                        placeholder-gray-400 resize-none"
+                        className="p-3 border border-slate-300 dark:border-gray-700 rounded-xl bg-white/50 dark:bg-slate-800/20 focus:outline-none focus:ring-2 focus:ring-purple-500 text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-gray-500 resize-none transition"
                     />
                 )}
 
@@ -147,8 +138,7 @@ const LoginPage = () => {
                 <button
                     type="submit"
                     disabled={isLoading}
-                    className="py-3 bg-gradient-to-r from-purple-400 to-violet-600 text-white
-                    rounded-md cursor-pointer disabled:opacity-60 transition font-medium"
+                    className="py-3 bg-gradient-to-r from-purple-500 to-violet-600 hover:from-purple-600 hover:to-violet-750 text-white rounded-full cursor-pointer disabled:opacity-60 transition font-bold shadow-md shadow-purple-500/20 active:scale-98"
                 >
                     {isLoading
                         ? "Please wait..."
@@ -159,34 +149,34 @@ const LoginPage = () => {
                         : "Login Now"}
                 </button>
 
-                {/* Terms — purely informational, NOT required so it can't block submission */}
-                <div className="flex items-center gap-2 text-sm text-gray-400">
-                    <input type="checkbox" id="terms" />
-                    <label htmlFor="terms" className="cursor-pointer">
-                        Agree to the terms of use &amp; privacy policy.
+                {/* Terms */}
+                <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-gray-400">
+                    <input type="checkbox" id="terms" className="cursor-pointer" />
+                    <label htmlFor="terms" className="cursor-pointer select-none">
+                        Agree to terms of use &amp; privacy policy.
                     </label>
                 </div>
 
                 {/* Switch between login / sign-up */}
                 <div>
                     {currState === "Sign up" ? (
-                        <p className="text-sm text-gray-400">
+                        <p className="text-sm text-slate-500 dark:text-gray-400">
                             Already have an account?{" "}
                             <button
                                 type="button"
                                 onClick={switchToLogin}
-                                className="font-medium text-violet-400 hover:underline"
+                                className="font-bold text-purple-600 dark:text-purple-400 hover:underline cursor-pointer"
                             >
                                 Login here
                             </button>
                         </p>
                     ) : (
-                        <p className="text-sm text-gray-400">
+                        <p className="text-sm text-slate-500 dark:text-gray-400">
                             Don&apos;t have an account?{" "}
                             <button
                                 type="button"
                                 onClick={switchToSignup}
-                                className="font-medium text-violet-400 hover:underline"
+                                className="font-bold text-purple-600 dark:text-purple-400 hover:underline cursor-pointer"
                             >
                                 Sign up here
                             </button>
