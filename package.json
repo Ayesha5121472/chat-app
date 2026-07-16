@@ -1,0 +1,7 @@
+{
+  "name": "chat-app-backend",
+  "version": "1.0.0",
+  "scripts": {
+    "start": "cd server && npm install && node server.js"
+  }
+}
